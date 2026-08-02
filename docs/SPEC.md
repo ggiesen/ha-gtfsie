@@ -20,12 +20,40 @@ specified from public issue reports, the GTFS and GTFS-Realtime specifications
 and the Home Assistant developer documentation. Issue reports describe symptoms,
 which is what was mined.
 
-**Coverage, and the known gap.** 214 requirements are recorded below, mined
-across the full issue history with one exception: issues #31-60 could not be
-mined, having been blocked twice by a transient classifier failure. Those thirty
-issues are the known hole in this document. Anything they describe is absent
-here, and that is a reason to re-run the mining before treating section 2 as
-complete rather than a reason to treat it as complete anyway.
+**Coverage.** 165 requirements are recorded below, numbered as a single sequence
+1 to 165 with an area-letter prefix, verified complete and without duplicates.
+They were distilled from 289 candidates mined across the whole issue history;
+the difference is near-duplicates merged during synthesis.
+
+Earlier revisions of this paragraph gave the *candidate* count as though it were
+the number written down -- 194, then 214, against 136 and 137 actually recorded.
+Both were wrong, and wrong in the flattering direction. The figure above is
+counted from this document rather than carried across from a tool's output.
+
+The gap the previous revision recorded -- issues #31-60, blocked twice by a
+transient classifier failure -- is closed. Re-mining that range in three smaller
+batches returned 75 candidates, of which 45 duplicated requirements already
+present and 28 were new; those 28 are I-138 through V-165.
+
+That pass also found three contradictions *inside* section 2. Each is resolved
+by amending the older requirement rather than leaving both in place to surface
+later as two tests that cannot both pass: Q-34 against the lookback window of
+Q-140, Q-37 against the optional route selection of Q-143, and R-65 against the
+affix normalisation of R-66 -- which were already inconsistent with each other
+before this revision, independently of anything newly mined.
+
+Two candidates were rejected on their merits, recorded here so they are not
+re-mined later as gaps. "Realtime epoch timestamps must be compared in the
+feed's local timezone" (#48) is confused: epoch comparison is zone-independent,
+and this architecture resolves everything to absolute instants at ingest, so
+there is nothing to implement. "Normalise across date, datetime and delay
+representations before comparison" (#55) restates the ingest-time instant model;
+building it as a comparison-time step would reintroduce precisely the class of
+defect that section 1.1 exists to design out.
+
+One finding from #32 is calibration rather than requirement: a 4 MB archive
+produced a 46.5 MB database, a ratio of about 11x. That belongs in the test
+fixtures for `ingest/estimate.py`, not in section 2.
 
 **What changed from the previous specification.** The storage layer, and only
 the storage layer. The earlier design used one database and mutated it in place
@@ -763,6 +791,8 @@ Destination arrival for the selected departure is `trip_instance.start_utc + tri
 - **I-25** When `frequencies.txt` is present, headway-based service is expanded into concrete departures for each stop (first departure plus each interval, offset by the stop's elapsed time from the trip start) and the expansion is recorded in `meta`. [#120] `[EDGE]` Otherwise a stop served every 25 minutes appears to have one departure per day.
 - **I-26** A user may nominate members to drop before extraction, so a non-compliant optional file can be discarded without manually unzipping, editing and re-zipping. Members the loader reads can never be dropped. [#17]
 - **I-27** No filesystem listing, file read or database call executes on the event loop; all such work runs in an executor or a subprocess. [#98][#102][#110]
+- **I-138** A zip whose GTFS text members sit inside a subdirectory rather than at the archive root imports successfully. Member lookup resolves by basename anywhere in the archive; when two members share a basename in different directories the archive is rejected with a message naming both paths rather than one being chosen silently. [#42] `[EDGE]` A publisher moving its files into a subfolder between releases otherwise produces an empty database and no error.
+- **I-139** A datasource is ready when a promoted database file exists whose `meta` records a completed generation and a matching schema version. Readiness is never inferred from the presence or absence of a side-effect artefact - a SQLite journal, a lock file, a staging or temporary zip, or a build file. [#41][#42] `[EDGE]` Marker-file logic reported partially imported sources as complete and complete sources as still running.
 
 ### 2.2 Query and time
 
@@ -772,10 +802,10 @@ Destination arrival for the selected departure is `trip_instance.start_utc + tri
 - **Q-31** A departure that appears to belong to the following feed service day may fall today after localisation, and vice versa; ordering against the current time is done purely on the absolute instant. [#107] `[EDGE]`
 - **Q-32** Departures are computed in the timezone of the feed/agency, not that of the Home Assistant instance, including when the two differ by several hours or when the agency zone differs from the stops' zone. [#63][#107] `[EDGE]` Amtrak declares `America/New_York` while serving `America/Los_Angeles` stops.
 - **Q-33** Every poll recomputes the departure set against the current wall clock. No absolute window, and no result, is cached from the time the entry was created. [#8][#100] `[EDGE]` A sensor counting down towards the hour at which it was configured the previous night.
-- **Q-34** Departures whose instant has passed are discarded from both the state and the list on every refresh. [#8]
+- **Q-34** Departures whose effective instant has passed are discarded from both the state and the list on every refresh, subject to the lookback window of Q-140. [#8]
 - **Q-35** With "include tomorrow" enabled, the state is the earliest departure at or after now across the combined set, each departure carries the service date it actually belongs to, and enabling the option does not change which departure is selected while departures remain today. [#23] `[EDGE]`
 - **Q-36** A configurable offset in minutes excludes departures sooner than `now + offset` from both the state and the list. The offset is purely a lead-time filter and is never used to compensate for a timezone error. [#16][#23][#107]
-- **Q-37** Departure lookup is constrained by the configured route and direction as well as by the origin/destination pair, so two entries sharing the same stops on different routes return independent, route-correct results. [#115] `[EDGE]`
+- **Q-37** Where a route is configured, departure lookup is constrained by it and by direction as well as by the origin/destination pair, so two entries sharing the same stops on different routes return independent, route-correct results. Route selection is itself optional; see Q-143. [#115] `[EDGE]`
 - **Q-38** Trips whose `direction_id` is NULL or absent are included, and `direction_id` is never required to identify a trip. [#72][#90] `[EDGE]` The 0/1 assignment is arbitrary per provider and static and realtime data can disagree for the same trip.
 - **Q-39** A trip whose service is defined in both `calendar.txt` and `calendar_dates.txt` appears exactly once for a given service day; the two sources are unioned and de-duplicated on trip identity plus instant. [#118] `[EDGE]` Otherwise every departure is listed twice.
 - **Q-40** Service records with all seven weekday flags zero are valid and active only via `calendar_dates` exceptions; composite hyphen-joined `service_id` values are treated as opaque strings. [#71] `[EDGE]`
@@ -787,6 +817,10 @@ Destination arrival for the selected departure is `trip_instance.start_utc + tri
 - **Q-46** A nearby-departures query over a metro-scale feed completes in a few hundred milliseconds, well inside the update interval. [#88]
 - **Q-47** The query layer returns explicit `truncated`, `exhausted` and `window_end_utc` flags, so "the materialisation window ran out" is structurally distinguishable from "the timetable is quiet". [B] `[EDGE]`
 - **Q-48** Service-date lookahead over the whole feed validity (up to 400 days) answers "when does this route/pair next run" without materialising anything, so a seasonal or weekend-only service can be validated out of season. [A; #5][#104] `[EDGE]`
+- **Q-140** Departure selection starts at `now - lookback` (configurable, default 15 minutes) as well as running forward. A departure whose scheduled instant has passed is retained only while realtime evidence places its effective instant in the future; one with no realtime data, or whose realtime instant has also passed, is dropped. This qualifies Q-34, which otherwise discards every passed instant unconditionally. [#55] `[EDGE]` A delayed vehicle that has not yet arrived is exactly the departure a user checking "can I still catch it" needs to see.
+- **Q-141** Ordering and selection of the next departure use each departure's effective instant - realtime where matched, scheduled otherwise - not the scheduled instant alone. A departure delayed past a later on-time one is ordered after it, and the state does not advance past a delayed departure until its realtime instant has passed. [#48] `[EDGE]` The reported symptom was the entity rolling forward while realtime still had the delayed bus inbound.
+- **Q-142** `calendar_dates.txt` exception_type 1 adds a service date and exception_type 2 removes one; a removal overrides the weekly pattern in `calendar.txt` for that date, and a trip whose service is removed produces no departure on it. [#40] `[EDGE]` A Saturday-only exception surfaced as a phantom Friday departure alongside the real one.
+- **Q-143** Route selection on an origin/destination entry is optional. With no route chosen the pair returns every service calling at both stops in the configured direction; with a route chosen, the flow states plainly that services on other route ids serving the same physical stops are excluded. This relaxes Q-37, which assumes a route is always configured. [#60] `[EDGE]` Translink SEQ splits one visible line across several route ids for night and off-peak services, so pinning one hides real trains.
 
 ### 2.3 Realtime
 
@@ -806,7 +840,7 @@ Destination arrival for the selected departure is `trip_instance.start_utc + tri
 - **R-62** A `stop_time_update` is applied only when it resolves to the sensor's own stop. Updates for other stops on the same trip, including stop ids absent from the static feed, are ignored without error. [#22] `[EDGE]`
 - **R-63** Matching uses stop id first, and falls back to `stop_sequence` within the trip when the realtime `stop_id` is empty or absent. A feed reporting `stop_sequence 0` on every entry still resolves by stop id. [#90][#119] `[EDGE]` Both pathologies exist and each breaks the other's naive implementation.
 - **R-64** Trip descriptors with empty `route_id`, empty `start_time` or empty `start_date` still match using `trip_id` plus stop. [#61][#90] `[EDGE]`
-- **R-65** `trip_id` values are matched as opaque exact strings with no parsing, truncation or assumption about format stability between feed versions. [#90] `[EDGE]` SNCF trip ids embed a timestamp that is not the service date and whose format changed between releases.
+- **R-65** `trip_id` values are matched as opaque strings. They are never parsed for meaning, truncated at an arbitrary offset, or assumed stable in format between feed versions; the only permitted transformation is the bounded affix normalisation of R-66 and R-144. [#90] `[EDGE]` SNCF trip ids embed a timestamp that is not the service date and whose format changed between releases.
 - **R-66** Where the realtime feed prefixes identifiers that the static feed does not, matching may strip an affix, but only on a `:`, `_` or space boundary and only when the normalised value resolves to exactly one static trip or stop. [#99] `[EDGE]` `MTA NYCT_JG_A5-...` against static `JG_A5-...`, and `MTA_308209` against `308209`.
 - **R-67** The full match ladder is, in order: exact trip id plus stop id; exact trip id plus stop sequence; affix-normalised trip id plus stop; route id plus direction plus stop with the nearest scheduled instant inside a bounded window; `trip_short_name` plus stop. When none matches, the scheduled departure is still published with the realtime fields empty. The rule that matched is recorded per departure as `match_rule`. [#93][#100]
 - **R-68** An absolute `time` takes precedence over a `delay`; a `time` of 0 or absent means "not provided" and the delay is applied to the scheduled instant instead; a zero epoch is never rendered as a 1970 departure; `departure` is preferred over `arrival` and each falls back to the other. [#18][#90][#119] `[EDGE]` `arrival {delay: 0, time: 0}` next to a valid departure is common.
@@ -824,6 +858,12 @@ Destination arrival for the selected departure is `trip_instance.start_utc + tri
 - **R-80** When the ratio of realtime trip ids that match nothing static exceeds a threshold, one repair issue is raised stating that the identifiers do not correlate, rather than a per-poll warning. [C]
 - **R-81** A SIRI StopMonitoring or EstimatedTimetable JSON document is accepted as an alternative realtime input and normalised into the same snapshot, tolerating `DatedVehicleJourneyRef` versus `DatedVehicleJourneySAERef`. [#99]
 - **R-82** Scheduled and realtime instants within one attribute set always use the same format and the same zone. [#63][#112] `[EDGE]` A local wall-clock string next to a UTC ISO string makes any delay calculation impossible.
+- **R-144** Affix normalisation is symmetric: it applies where the static identifier carries an affix the realtime feed lacks as well as the reverse, under the same boundary and uniqueness constraints - split only on `:`, `_` or space, and only when the normalised value resolves to exactly one counterpart. [#34] `[EDGE]` SNCF's static ids append a dated qualifier its realtime feed omits, so R-65's exact-string rule alone yields no realtime for any trip.
+- **R-145** A realtime update whose effective instant has already passed is discarded from the match rather than donating a stale instant to a scheduled departure. [#34][#48] `[EDGE]` At least two providers keep publishing hours-old stop times in a freshly fetched feed, which R-74's fetch-age TTL does not catch.
+- **R-146** `schedule_relationship` is honoured: a SKIPPED stop time update produces no departure and marks the scheduled row cancelled, a trip-level CANCELED cancels every departure of that trip, and NO_DATA leaves the scheduled instant untouched. Where a trip update carries several updates resolving to the same stop, the non-skipped one with a usable time wins; if several survive, the lowest `stop_sequence` wins. The choice is deterministic and recorded in `match_rule`. [#48] `[EDGE]` Spokane Transit emits the same stop twice, once skipped and once with a real timestamp.
+- **R-147** Realtime matching and enrichment run for every departure published in the list, not only the one that becomes the state; each entry carries its own `match_rule` and realtime fields. [#40] `[EDGE]` A dashboard used to pick among the next several buses is theoretical, and at peak materially wrong, if only the head of the list is live.
+- **R-148** A GTFS-Realtime document served as JSON (the official JSON mapping, `{"header": {"gtfsRealtimeVersion": "2.0", ...}, "entity": [...]}`) is accepted and normalised into the same snapshot as the protobuf form, selected by the bytes received rather than by URL or configuration. [#52] `[EDGE]` RNV publishes a `/tripupdates/decoded` endpoint that R-49 and R-50 would classify as an error.
+- **R-149** The realtime poll and the static departure requery run on independent intervals; a realtime cycle never triggers a static requery, an index rebuild or a feed re-read. [#40] `[EDGE]` Coupling them forced a full static requery per realtime tick, which was the root cause of both the request volume and the sensor instability reported.
 
 ### 2.4 Sensor
 
@@ -844,6 +884,9 @@ Destination arrival for the selected departure is `trip_instance.start_utc + tri
 - **S-97** Requesting an entity update through Home Assistant's standard update mechanism re-queries departures and re-reads the cached realtime snapshot without re-initialising the config entry and without making the entity unavailable. [#62]
 - **S-98** The heavy list attributes are declared in the recorder exclusion list. [B]
 - **S-99** The entity is unavailable only when its datasource is missing or failed; never during a rebuild, never during a realtime outage. [#63][#108]
+- **S-150** The entity update interval is independent of the configured lead-time offset; changing the offset does not change how often departures are recomputed, and the published set never lags the clock by more than one update interval. [#31] `[EDGE]` A reporter's offset appeared inert because he had set the refresh interval equal to it.
+- **S-151** The published attribute set is bounded in serialised size (default budget 12 KiB, under Home Assistant's 16384-byte state attribute limit). The list is truncated to fit, `truncated` is set, and the published count is exposed. [#54] `[EDGE]` A busy stop with realtime exceeded the recorder limit at peak and lost all attribute history.
+- **S-152** Entities within an entry are isolated: one that raises, times out or yields nothing does not prevent the others being computed and published, and an entity that has become empty repopulates by itself within one update interval once departures reappear, with no reload, service call or re-creation. [#57] `[EDGE]` A stuck empty entity appeared to block its siblings from populating at all.
 
 ### 2.5 Config flow
 
@@ -858,6 +901,11 @@ Destination arrival for the selected departure is `trip_instance.start_utc + tri
 - **C-108** Multiple static datasources are configurable simultaneously with independent refresh schedules; each departures or local-stop configuration is scoped to exactly one datasource. [#81][#87]
 - **C-109** Selector values are raw identifiers and labels are built separately, so identifiers containing colons or spaces are never split. [#90][#113] `[EDGE]`
 - **C-110** The setup UI states plainly that the static feed is not refreshed automatically unless a refresh interval is configured, and shows the loaded feed's validity window. [#27][#85]
+- **C-153** A route selection resolving to zero stops, or a stop selection resolving to zero trips, returns to the same step with a message naming the route and datasource and stating the feed has no usable stops for it. It never raises and never surfaces as "Unknown error occurred". [#35] `[EDGE]` The Belgian TEC feed binds 209,605 trips to one route id, producing an empty stop list and an `IndexError`.
+- **C-154** Route and stop pickers are search-driven and bounded: the user types a fragment, the flow queries with that fragment and a result limit, and no step materialises a full list of a six-figure feed into a selector. [#35]
+- **C-155** Removing a datasource deletes only files belonging to that exact datasource. Cleanup is scoped to that datasource's own directory or keyed on its identifier, never on a name prefix or glob. [#42] `[EDGE]` Deleting "dublin" destroyed the working "dublin-bus-gtfs" database and archive.
+- **C-156** Removal succeeds and reports success when some or all expected files are already absent - a database never created, a partial build file, a deleted archive, a leftover temporary zip. [#41] `[EDGE]` A `FileNotFoundError` on the delete path left a permanently unusable entry in the UI, which is the state a user most needs to delete from.
+- **C-157** When the source for a dataset update is a local zip or a local extracted directory, the URL field is optional and an update with it blank succeeds; the URL is required only for a remote download. [#56] `[EDGE]` Users entered a meaningless URL that was never fetched purely to satisfy the form.
 
 ### 2.6 Local stops
 
@@ -871,6 +919,13 @@ Destination arrival for the selected departure is `trip_instance.start_utc + tri
 - **L-118** Refreshes are rate-limited: an update is skipped when the tracked location has moved less than a threshold (default 100 m) or the previous update was less than a threshold ago (default 30 s). [#75]
 - **L-119** Location-based sensors expose a per-departure list where each entry carries instant, stop name, route short and long name, headsign, trip id, direction and icon, and entity names follow a documented, stable pattern so they can be selected by wildcard in dashboard cards. [#95]
 - **L-120** Location-based departures apply the same timezone resolution as start/end schedules, with a per-entry timezone override available where the feed supplies no usable zone. [#107]
+- **L-158** A location-derived entity returns departures whose stop matches that entity's own stop id and nothing else; stop name, stop id, platform and departures always describe the same physical stop. [#38] `[EDGE]` The sensor for HLO001 published the timetable and stop name of FAY002, giving wrong times in the wrong direction.
+- **L-159** Distinct stop ids are never collapsed by shared `stop_name` or shared `parent_station`. Opposite-direction platform pairs metres apart each get their own entity, named distinguishably by platform code or, failing that, stop id. [#38] `[EDGE]` This is the inverse of the station-name mode of C-102 and the two modes share the same stop tables.
+- **L-160** Within one location query a given (trip, stop, service date) appears at most once, including when a stop is reached through several matched rows - a parent station and its children both in radius, or duplicate stop rows in the box. A trip calling at two stops in range appears once per distinct stop. [#40] `[EDGE]` Every trip appeared twice, which is a different cause from the calendar union of Q-39.
+- **L-161** The entity set for a location entry is a function of geography and configuration alone, never of whether a stop currently has departures. A stop that goes quiet keeps its entity, and the set is re-derived on the configured interval so a stop returning to scope regains one without a reload. [#57]
+- **L-162** A location entry supports the same per-entry options as an origin/destination entry: the lead-time offset of Q-36, realtime enrichment from the datasource's configured endpoints through the same match ladder, and route/direction restriction. [#50][#58] `[EDGE]` Realtime worked for individually configured stops while every local stop reported a parse error.
+- **L-163** The search radius is settable during initial setup and afterwards in the options flow, with a conservative default of the order of 200 m and an accepted range reaching at least 5000 m. [#46][#47][#53][#59] `[EDGE]` Users were told to reduce a radius that first-time setup gave them no way to change.
+- **L-164** When more stops fall inside the radius than the configured cap allows, the cap selects the N nearest by great-circle distance in a deterministic order, not an arbitrary or query-order subset, and each selected stop's distance is exposed. [#46][#47] `[EDGE]` An arbitrary subset drops the stop outside the user's door in favour of a further one, and churns between refreshes.
 
 ### 2.7 Services and actions
 
@@ -883,6 +938,7 @@ Destination arrival for the selected departure is `trip_instance.start_utc + tri
 - **V-127** `gtfsie.download_static` fetches and validates a static archive, optionally dropping nominated members, and reports the validated path. [#17]
 - **V-128** `gtfsie.extract_departures` returns today's and tomorrow's departures for an entity as a service response. `gtfsie.extract_trip_stops` returns a trip instance's ordered stops with absolute instants. Both declare `SupportsResponse.ONLY`. [#93]
 - **V-129** `gtfsie.refresh_local_stops` re-evaluates a location entry on demand. [#62]
+- **V-165** `gtfsie.download_realtime` accepts a Home Assistant template for the credential value, rendered at call time, and a caller-supplied destination filename that a sensor can then be pointed at under R-57. [#51][#54] `[EDGE]` RNV rotates its token hourly through an OAuth call, so no static config entry value can work.
 
 ### 2.8 Platform and packaging
 
@@ -1046,3 +1102,17 @@ Requirement R-57 lets a sensor read realtime from a local file, which is a path 
 **4.10 Minimum Home Assistant version.**
 Driven by subentry reconfigure support (4.3), `OptionsFlowWithReload`, and the current `ConfigEntryNotReady` deprecation.
 **Recommendation:** pin `homeassistant` to the release that first carries subentry reconfigure plus one further release of margin, and add an explicit version check in `async_setup` that logs a named error rather than failing at import. Revisit only if the maintainer has evidence of a meaningful user population on older cores.
+
+**4.11 Over-fetch for effective-instant ordering.**
+Q-141 orders departures by effective instant and Q-140 admits a lookback window,
+but `index.sqlite` is ordered by *scheduled* instant and the query applies its
+`limit` in SQL, while the realtime overlay happens afterwards in the
+coordinator. A departure delayed into the visible window can therefore be one
+SQL has already cut off, and Q-47's `truncated` and `exhausted` flags would then
+describe the pre-overlay page rather than the page actually published.
+**Recommendation:** the query functions take a lower bound of `now - lookback`
+and a limit padded above the presentation limit; the presenter re-sorts by
+effective instant, re-trims, and owns Q-47's flags. Choose the padding from the
+largest delay worth honouring rather than a round number. Cheap to build in at
+phase 4 and expensive to retrofit at phase 6, which is when it would otherwise
+be found.
