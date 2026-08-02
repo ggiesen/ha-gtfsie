@@ -9,11 +9,13 @@ ours, and no watch can be left pointing at a datasource that is gone.
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from pygtfsie.exceptions import FeedUnavailable
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.gtfsie.const import (
@@ -34,6 +36,24 @@ FEED_URL = "https://transit.example/gtfs.zip"
 def _enable_custom_integrations(enable_custom_integrations):
     """Without this Home Assistant will not load a component from custom_components."""
     return enable_custom_integrations
+
+
+@pytest.fixture(autouse=True)
+def _no_network():
+    """Fail the download immediately, everywhere in this file.
+
+    Setting up an entry starts a real import in the background, and the harness
+    blocks DNS -- correctly, since a test that reached the network would be
+    testing somebody else's server. Failing the fetch outright keeps that from
+    surfacing as a teardown error in tests that are about configuration and
+    never asked for a feed. The end-to-end path is covered in test_sensor.py,
+    against a real archive.
+    """
+    with patch(
+        "custom_components.gtfsie.datasource.fetch",
+        side_effect=FeedUnavailable("no network in tests"),
+    ):
+        yield
 
 
 async def _add_datasource(hass: HomeAssistant, url: str = FEED_URL, name: str = "Toronto"):
@@ -66,14 +86,14 @@ class TestDatasourceFlow:
         """Two entries for one URL would mean importing identical data twice,
         at the cost of an hour and a gigabyte apiece."""
         await _add_datasource(hass)
-        await hass.async_block_till_done()
+        await hass.async_block_till_done(wait_background_tasks=True)
         again = await _add_datasource(hass, name="Toronto again")
         assert again["type"] is FlowResultType.ABORT
         assert again["reason"] == "already_configured"
 
     async def test_a_different_feed_is_a_separate_datasource(self, hass: HomeAssistant):
         await _add_datasource(hass)
-        await hass.async_block_till_done()
+        await hass.async_block_till_done(wait_background_tasks=True)
         other = await _add_datasource(hass, url="https://other.example/gtfs.zip", name="Vancouver")
         assert other["type"] is FlowResultType.CREATE_ENTRY
         assert len(hass.config_entries.async_entries(DOMAIN)) == 2
@@ -119,16 +139,25 @@ class TestRouteSubentry:
             context={"source": config_entries.SOURCE_USER},
         )
         assert result["type"] is FlowResultType.FORM
-        return await hass.config_entries.subentries.async_configure(
+        created = await hass.config_entries.subentries.async_configure(
             result["flow_id"], {CONF_ORIGIN_STOP_IDS: "STOP_A", **overrides}
         )
+        # Adding a subentry schedules a reload, which starts another import.
+        # Left unawaited it runs after the test returns, by which point the
+        # fetch patch is gone and it reaches for the network for real.
+        await hass.async_block_till_done(wait_background_tasks=True)
+        return created
 
     @pytest.fixture
     async def entry(self, hass: HomeAssistant):
         entry = MockConfigEntry(domain=DOMAIN, data={CONF_SOURCE_URL: FEED_URL}, title="Toronto", unique_id=FEED_URL)
         entry.add_to_hass(hass)
         await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_block_till_done()
+        # Setup starts the import as a background task on purpose, so an
+        # ordinary block_till_done returns while it is still running and it
+        # then outlives the test. Waiting for it here is the test respecting
+        # the design rather than racing it.
+        await hass.async_block_till_done(wait_background_tasks=True)
         return entry
 
     async def test_a_route_watch_is_added_as_a_child(self, hass: HomeAssistant, entry):
@@ -184,7 +213,11 @@ class TestVicinitySubentry:
         entry = MockConfigEntry(domain=DOMAIN, data={CONF_SOURCE_URL: FEED_URL}, title="Toronto", unique_id=FEED_URL)
         entry.add_to_hass(hass)
         await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_block_till_done()
+        # Setup starts the import as a background task on purpose, so an
+        # ordinary block_till_done returns while it is still running and it
+        # then outlives the test. Waiting for it here is the test respecting
+        # the design rather than racing it.
+        await hass.async_block_till_done(wait_background_tasks=True)
         return entry
 
     async def test_a_vicinity_watch_is_added(self, hass: HomeAssistant, entry):
@@ -211,7 +244,7 @@ class TestDeletionCascades:
         the framework removes them together, so the orphaning cannot happen.
         """
         result = await _add_datasource(hass)
-        await hass.async_block_till_done()
+        await hass.async_block_till_done(wait_background_tasks=True)
         entry = hass.config_entries.async_entries(DOMAIN)[0]
 
         sub = await hass.config_entries.subentries.async_init(
@@ -219,10 +252,11 @@ class TestDeletionCascades:
             context={"source": config_entries.SOURCE_USER},
         )
         await hass.config_entries.subentries.async_configure(sub["flow_id"], {CONF_ORIGIN_STOP_IDS: "STOP_A"})
+        await hass.async_block_till_done(wait_background_tasks=True)
         assert len(entry.subentries) == 1
 
         assert await hass.config_entries.async_remove(entry.entry_id)
-        await hass.async_block_till_done()
+        await hass.async_block_till_done(wait_background_tasks=True)
         assert hass.config_entries.async_entries(DOMAIN) == []
         del result
 
@@ -232,7 +266,7 @@ class TestEntryLifecycle:
         entry = MockConfigEntry(domain=DOMAIN, data={CONF_SOURCE_URL: FEED_URL})
         entry.add_to_hass(hass)
         assert await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_block_till_done()
+        await hass.async_block_till_done(wait_background_tasks=True)
         assert entry.state is config_entries.ConfigEntryState.LOADED
 
         assert await hass.config_entries.async_unload(entry.entry_id)
