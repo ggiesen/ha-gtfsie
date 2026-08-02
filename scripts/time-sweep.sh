@@ -51,11 +51,18 @@ if [ "$QUICK" -eq 0 ]; then
     "2026-08-03 14:00:00"  "2026-08-04 14:00:00"  "2026-08-05 14:00:00"
     "2026-08-06 14:00:00"  "2026-08-07 14:00:00"  "2026-08-08 14:00:00"
     "2026-08-09 14:00:00"
-    # DST in both directions, month and year boundaries, and a date near the
-    # end of the feed builder's default validity window.
+    # DST in both directions, and month and year boundaries.
     "2026-03-08 06:30:00"  "2026-03-08 07:30:00"  "2026-11-01 05:30:00"
     "2026-02-28 23:30:00"  "2026-08-31 23:30:00"  "2026-12-31 23:30:00"
     "2027-12-30 12:00:00"
+    # Years out, and the reason matters. This list used to stop just *inside*
+    # the feed builder's default validity window -- it knew the fixture had an
+    # end date and deliberately stayed before it. Testing up to a boundary but
+    # never past it is exactly how an expiring fixture stays invisible: every
+    # instant passes, right up until the real date crosses the line and the
+    # timetable silently empties. The default calendar is now unbounded, and
+    # these two instants are here to keep it that way.
+    "2030-11-11 22:00:00"  "2035-01-01 00:00:01"
   )
 fi
 
@@ -86,6 +93,18 @@ for t in "${INSTANTS[@]}"; do
     failures=$((failures + 1))
   fi
 done
+
+# A sweep looks for *variation*, so a suite that fails identically at every
+# instant passes it. Announcing "identical at all N instants" against a red
+# baseline reads as a clean bill of health and is worse than saying nothing.
+case "$baseline" in
+  *failed*|*error*)
+    echo "" >&2
+    echo "the baseline is not green ($baseline), so this sweep only established" >&2
+    echo "that it fails consistently. Fix the suite first." >&2
+    exit 1
+    ;;
+esac
 
 echo
 if [ "$failures" -ne 0 ]; then

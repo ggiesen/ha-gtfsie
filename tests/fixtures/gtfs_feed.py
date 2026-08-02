@@ -74,8 +74,13 @@ class CalendarEntry:
     friday: int = 1
     saturday: int = 0
     sunday: int = 0
-    start_date: str = "20260101"
-    end_date: str = "20271231"
+    # Unbounded by default. Blank start and end dates are legal GTFS and mean
+    # "no stated validity". Real bounds here would be a dated landmine: the
+    # fixture works until the end date passes, and then any test deriving a
+    # window from the real clock silently sees no service and reports an empty
+    # timetable rather than failing. Tests about validity set them explicitly.
+    start_date: str = ""
+    end_date: str = ""
 
 
 DEFAULT_STOPS = [Stop("STOP_A", "Origin"), Stop("STOP_B", "Destination")]

@@ -24,11 +24,16 @@ objects, so tests exercise the real parse path, including the response handling 
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from google.transit import gtfs_realtime_pb2
+
+#: A fixed instant for feed headers, rather than the wall clock.
+#: 2026-06-15T12:00:00Z. A fixture stamped with "now" makes any test that
+#: compares a feed's age against the clock quietly time-dependent, and the
+#: failure only appears once something starts checking freshness.
+REFERENCE_TIMESTAMP = 1781524800
 
 
 @dataclass
@@ -74,7 +79,7 @@ def build_trip_updates(updates: list[TripUpdate], *, timestamp: int | None = Non
     """Serialise trip updates to GTFS-RT wire format."""
     feed = gtfs_realtime_pb2.FeedMessage()
     feed.header.gtfs_realtime_version = version
-    feed.header.timestamp = timestamp if timestamp is not None else int(time.time())
+    feed.header.timestamp = REFERENCE_TIMESTAMP if timestamp is None else timestamp
     feed.header.incrementality = gtfs_realtime_pb2.FeedHeader.FULL_DATASET
 
     for index, update in enumerate(updates, start=1):
@@ -110,7 +115,7 @@ def build_trip_updates(updates: list[TripUpdate], *, timestamp: int | None = Non
 def build_vehicle_positions(positions: list[VehiclePosition], *, timestamp: int | None = None) -> bytes:
     feed = gtfs_realtime_pb2.FeedMessage()
     feed.header.gtfs_realtime_version = "2.0"
-    feed.header.timestamp = timestamp if timestamp is not None else int(time.time())
+    feed.header.timestamp = REFERENCE_TIMESTAMP if timestamp is None else timestamp
     feed.header.incrementality = gtfs_realtime_pb2.FeedHeader.FULL_DATASET
 
     for index, position in enumerate(positions, start=1):
@@ -132,7 +137,7 @@ def build_alerts(alerts: list[tuple[str, str]]) -> bytes:
     """``alerts`` is a list of (header_text, description_text)."""
     feed = gtfs_realtime_pb2.FeedMessage()
     feed.header.gtfs_realtime_version = "2.0"
-    feed.header.timestamp = int(time.time())
+    feed.header.timestamp = REFERENCE_TIMESTAMP
     feed.header.incrementality = gtfs_realtime_pb2.FeedHeader.FULL_DATASET
 
     for index, (header_text, description) in enumerate(alerts, start=1):
