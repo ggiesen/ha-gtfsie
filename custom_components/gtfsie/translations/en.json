@@ -1,0 +1,76 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a GTFS datasource",
+        "description": "A datasource is one transit feed. Routes and nearby-stop watches are added to it afterwards.",
+        "data": {
+          "name": "Name",
+          "source_url": "Feed URL (a GTFS .zip)",
+          "refresh_hours": "Refresh every (hours)",
+          "horizon_days": "Days of departures to prepare"
+        }
+      }
+    },
+    "error": { "invalid_url": "Enter an http:// or https:// URL pointing at a GTFS zip archive." },
+    "abort": { "already_configured": "That feed URL is already set up." }
+  },
+  "config_subentries": {
+    "route": {
+      "title": "Route",
+      "step": {
+        "user": {
+          "title": "Watch a stop",
+          "description": "Stop ids are taken from the feed and are case-sensitive. Separate several with commas.",
+          "data": {
+            "origin_stop_ids": "Origin stop id(s)",
+            "destination_stop_ids": "Destination stop id(s), optional",
+            "route_id": "Route id, optional",
+            "direction_id": "Direction id, optional",
+            "offset_minutes": "Ignore departures sooner than (minutes)",
+            "lookback_minutes": "Keep showing departures for (minutes) after they were due",
+            "limit": "Departures to publish"
+          }
+        },
+        "reconfigure": {
+          "title": "Change this watch",
+          "data": {
+            "origin_stop_ids": "Origin stop id(s)",
+            "destination_stop_ids": "Destination stop id(s), optional",
+            "route_id": "Route id, optional",
+            "direction_id": "Direction id, optional",
+            "offset_minutes": "Ignore departures sooner than (minutes)",
+            "lookback_minutes": "Keep showing departures for (minutes) after they were due",
+            "limit": "Departures to publish"
+          }
+        }
+      },
+      "error": { "no_origin": "Give at least one origin stop id." }
+    },
+    "vicinity": {
+      "title": "Nearby stops",
+      "step": {
+        "user": {
+          "title": "Watch stops near something",
+          "data": {
+            "tracker_entity_id": "Follow this entity",
+            "radius_m": "Radius (metres)",
+            "max_stops": "Most stops to watch",
+            "offset_minutes": "Ignore departures sooner than (minutes)",
+            "limit": "Departures to publish"
+          }
+        },
+        "reconfigure": {
+          "title": "Change these nearby stops",
+          "data": {
+            "tracker_entity_id": "Follow this entity",
+            "radius_m": "Radius (metres)",
+            "max_stops": "Most stops to watch",
+            "offset_minutes": "Ignore departures sooner than (minutes)",
+            "limit": "Departures to publish"
+          }
+        }
+      }
+    }
+  }
+}

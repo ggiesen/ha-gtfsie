@@ -222,9 +222,7 @@ def fetch(feed: RealFeed, *, timeout: int = 300, force: bool = False) -> Path:
     tmp = target.with_suffix(".zip.part")
     request = urllib.request.Request(
         feed.url,
-        headers={
-            "User-Agent": "ha-gtfsie-tests/1.0 (+https://gitlab.com/ggiesen/ha-gtfsie)"
-        },
+        headers={"User-Agent": "ha-gtfsie-tests/1.0 (+https://gitlab.com/ggiesen/ha-gtfsie)"},
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
         tmp.write_bytes(response.read())

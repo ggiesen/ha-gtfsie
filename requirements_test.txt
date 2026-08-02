@@ -1,23 +1,35 @@
 # Test dependencies for ha-gtfsie.
 #
-# Deliberately short. There is no integration code yet, so nothing here needs
-# Home Assistant: the only third-party import anywhere in the tests is the
-# GTFS-Realtime protobuf bindings, used to build fixture payloads.
-#
-# pytest-homeassistant-custom-component arrives with the first module that
-# imports homeassistant. It is not here yet on purpose: it pins one exact Home
-# Assistant version, so adding it before anything needs it would set this
+# pytest-homeassistant-custom-component pins one exact Home Assistant version
+# and, through it, a minimum Python. That is why it was kept out until there was
+# integration code that needed it: adding it earlier would have set this
 # project's supported floor as a side effect of a dependency file rather than as
-# a decision. See docs/SPEC.md open question 4.10.
+# a decision.
 #
-# The GTFS engine itself lives in pygtfsie and is installed from PyPI; during
-# development, point at a checkout instead:
-#   pip install -e ../pygtfsie
+# 0.13.348 is the newest release pinning a *stable* Home Assistant (2026.7.4);
+# later releases track 2026.8 betas. It requires Python 3.14, which is why the
+# test matrix is 3.14 alone -- the engine, pygtfsie, is separately tested from
+# 3.11 upward because it has no such constraint.
+#
+# Note the deliberate gap between this and manifest.json. The manifest declares
+# a floor of 2025.9.0, which is an API-availability claim: subentry reconfigure
+# ships from 2025.3.0 and OptionsFlowWithReload from 2025.8.0, so 2025.8.0 is the
+# binding driver and 2025.9.0 adds a release of margin. Tests run against the
+# current release, not the floor, so support for the floor is a claim about the
+# API surface rather than one this suite verifies. See docs/SPEC.md 4.10.
+pytest-homeassistant-custom-component==0.13.348
 
-pytest>=8
 ruff>=0.6
 
-# Pinned to match what the integration will declare in manifest.json, so a
-# fixture cannot encode a protobuf shape the runtime would reject.
+# The engine, from git until it is published. manifest.json already declares the
+# PyPI pin that users will install, so this line changes to `pygtfsie==<version>`
+# at the first release and nothing else moves.
+#
+# For local development, install a checkout over the top and it wins:
+#   pip install -e ../pygtfsie
+pygtfsie @ git+https://gitlab.com/ggiesen/pygtfsie.git@master
+
+# Building GTFS-Realtime fixtures. Same pins the integration declares in
+# manifest.json, so a fixture cannot encode a protobuf shape the runtime rejects.
 gtfs-realtime-bindings==1.0.0
 protobuf>=5.28

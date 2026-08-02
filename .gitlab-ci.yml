@@ -3,7 +3,7 @@ stages:
   - test
 
 default:
-  image: python:3.13-slim
+  image: python:3.14-slim
 
 ruff:
   stage: lint
@@ -12,16 +12,15 @@ ruff:
     - ruff check tests
     - ruff format --check tests
 
-# No Home Assistant here yet, so no pytest-homeassistant-custom-component and no
-# version pin inherited from it. When the first HA-facing module lands, PHACC
-# arrives with it and fixes this matrix to the Python versions that Home
-# Assistant release supports; until then, running wide is free information.
+# One Python, and not by choice. pytest-homeassistant-custom-component pins one
+# exact Home Assistant release, and 2026.7.4 requires Python 3.14, so there is
+# no matrix to run. The engine is separately tested from 3.11 upward in
+# pygtfsie, which has no such constraint -- which is most of why it is a
+# separate package.
 pytest:
   stage: test
-  parallel:
-    matrix:
-      - PY: ["3.12", "3.13", "3.14"]
-  image: python:$PY-slim
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git
   script:
     - pip install -r requirements_test.txt
     - pytest -q
@@ -33,7 +32,9 @@ pytest:
 time-sweep:
   stage: test
   before_script:
-    - apt-get update -qq && apt-get install -y -qq --no-install-recommends faketime
+    # git as well as faketime: the engine is installed from a git URL until it
+    # is published, and the slim image ships neither.
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends faketime git
     - pip install -r requirements_test.txt
   script:
     - scripts/time-sweep.sh

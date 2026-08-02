@@ -3,10 +3,15 @@
 A Home Assistant integration for public transit departures from GTFS static
 timetables and GTFS-Realtime feeds.
 
-> **Status: pre-alpha.** There is no working integration here yet. What exists is
-> a specification ([`docs/SPEC.md`](docs/SPEC.md)) and a test fixture harness.
-> The engine it builds on, [pygtfsie](https://gitlab.com/ggiesen/pygtfsie), has
-> its first phase implemented. Nothing is installable.
+> **Status: pre-alpha.** The config flow works -- a datasource can be added and
+> route and vicinity watches attached to it -- but nothing yet reads a feed or
+> produces an entity, so there is nothing to install. The engine it builds on,
+> [pygtfsie](https://gitlab.com/ggiesen/pygtfsie), handles fetch, validation,
+> import, materialisation and departure queries.
+>
+> `manifest.json` declares `pygtfsie` as a requirement and that package is not
+> yet on PyPI, so the integration cannot be installed through HACS until it is.
+> Tests install the engine from git; see `requirements_test.txt`.
 
 ## What it is
 

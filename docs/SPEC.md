@@ -1112,7 +1112,13 @@ Requirement R-57 lets a sensor read realtime from a local file, which is a path 
 
 **4.10 Minimum Home Assistant version.**
 Driven by subentry reconfigure support (4.3), `OptionsFlowWithReload`, and the current `ConfigEntryNotReady` deprecation. Subentry reconfigure is no longer the unknown: it ships from **2025.3.0** (4.3 records how that was established), so on that count alone the floor plus one release of margin is 2025.4.0. The other two drivers are unpinned and may well set a higher floor; whichever is highest wins, and each should be checked the same way rather than inferred.
-**Recommendation:** pin `homeassistant` to the release that first carries subentry reconfigure plus one further release of margin, and add an explicit version check in `async_setup` that logs a named error rather than failing at import. Revisit only if the maintainer has evidence of a meaningful user population on older cores.
+**Recommendation:** pin the floor to the highest of the drivers plus one further release of margin, and add an explicit version check in `async_setup` that logs a named error rather than failing at import. Revisit only if the maintainer has evidence of a meaningful user population on older cores.
+
+**Where the floor is declared.** Not in `manifest.json`. Home Assistant's `Manifest` TypedDict in `homeassistant/loader.py` has no `homeassistant` key and the loader never reads one, so a minimum version placed there is silently ignored. It belongs in `hacs.json`, which documents `homeassistant` as the minimum-version key and enforces it at download time. `hacs.json` also carries `hacs` for a minimum HACS version and `persistent_directory` for a path inside the integration that survives upgrades -- the latter is not needed here, since the databases live under the configuration directory rather than inside the integration.
+
+**Measured, as of the 2025 releases:** subentry reconfigure ships from **2025.3.0** (absent at 2025.2.0) and `OptionsFlowWithReload` from **2025.8.0** (absent at 2025.7.0), each established by reading `homeassistant/config_entries.py` at the release tag. `OptionsFlowWithReload` is therefore the binding driver and the floor is **2025.9.0**. The `ConfigEntryNotReady` deprecation is a deprecation rather than a requirement and does not raise it.
+
+**A gap worth stating.** The test harness pins one exact Home Assistant, currently 2026.7.4, so the suite verifies the current release and not the floor. Support for 2025.9.0 is a claim about which API surface exists, not one these tests exercise. Closing it would mean a second CI job against an older `pytest-homeassistant-custom-component` and an older Python; worth doing if anyone reports trouble on an older core, and not worth doing speculatively.
 
 **4.11 Over-fetch for effective-instant ordering.**
 Q-141 orders departures by effective instant and Q-140 admits a lookback window,

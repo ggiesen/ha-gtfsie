@@ -1,0 +1,17 @@
+[tool.pytest.ini_options]
+# pytest-homeassistant-custom-component installs autouse fixtures that are
+# coroutines, so pytest-asyncio has to be in auto mode for them to be handled at
+# all. Without this every test errors during setup, including ones that never
+# touch Home Assistant.
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+# Home Assistant's own floor is higher, but the fixture builders are shared with
+# pygtfsie, which supports 3.11 upward. Targeting the lower of the two keeps a
+# construct from being introduced here that the engine cannot accept.
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]

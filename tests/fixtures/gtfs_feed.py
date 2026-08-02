@@ -151,9 +151,7 @@ def build_feed(
 
     files: dict[str, str] = {
         "agency.txt": _csv([agency_row], agency_header),
-        "stops.txt": _csv(
-            [{k: getattr(s, k) for k in stop_header} for s in stops], stop_header
-        ),
+        "stops.txt": _csv([{k: getattr(s, k) for k in stop_header} for s in stops], stop_header),
         "routes.txt": _csv(
             [
                 {
@@ -204,9 +202,7 @@ def build_feed(
                     "stop_sequence": seq,
                 }
                 for t in trips
-                for seq, (stop_id, arrival, departure) in enumerate(
-                    t.stop_times, start=1
-                )
+                for seq, (stop_id, arrival, departure) in enumerate(t.stop_times, start=1)
             ],
             ["trip_id", "arrival_time", "departure_time", "stop_id", "stop_sequence"],
         ),
@@ -245,10 +241,7 @@ def build_feed(
 
     if calendar_dates:
         files["calendar_dates.txt"] = _csv(
-            [
-                {"service_id": sid, "date": date, "exception_type": kind}
-                for sid, date, kind in calendar_dates
-            ],
+            [{"service_id": sid, "date": date, "exception_type": kind} for sid, date, kind in calendar_dates],
             ["service_id", "date", "exception_type"],
         )
 

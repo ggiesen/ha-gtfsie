@@ -70,9 +70,7 @@ class VehiclePosition:
     bearing: float | None = None
 
 
-def build_trip_updates(
-    updates: list[TripUpdate], *, timestamp: int | None = None, version: str = "2.0"
-) -> bytes:
+def build_trip_updates(updates: list[TripUpdate], *, timestamp: int | None = None, version: str = "2.0") -> bytes:
     """Serialise trip updates to GTFS-RT wire format."""
     feed = gtfs_realtime_pb2.FeedMessage()
     feed.header.gtfs_realtime_version = version
@@ -90,10 +88,8 @@ def build_trip_updates(
         if update.start_date:
             entity.trip_update.trip.start_date = update.start_date
         if update.schedule_relationship:
-            entity.trip_update.trip.schedule_relationship = (
-                gtfs_realtime_pb2.TripDescriptor.ScheduleRelationship.Value(
-                    update.schedule_relationship
-                )
+            entity.trip_update.trip.schedule_relationship = gtfs_realtime_pb2.TripDescriptor.ScheduleRelationship.Value(
+                update.schedule_relationship
             )
         for stop in update.stop_time_updates:
             stu = entity.trip_update.stop_time_update.add()
@@ -111,9 +107,7 @@ def build_trip_updates(
     return feed.SerializeToString()
 
 
-def build_vehicle_positions(
-    positions: list[VehiclePosition], *, timestamp: int | None = None
-) -> bytes:
+def build_vehicle_positions(positions: list[VehiclePosition], *, timestamp: int | None = None) -> bytes:
     feed = gtfs_realtime_pb2.FeedMessage()
     feed.header.gtfs_realtime_version = "2.0"
     feed.header.timestamp = timestamp if timestamp is not None else int(time.time())

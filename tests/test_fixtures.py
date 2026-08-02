@@ -150,9 +150,7 @@ class TestBuildRealtime:
                     trip_id="T1",
                     route_id="R1",
                     stop_time_updates=[
-                        StopTimeUpdate(
-                            stop_id="STOP_A", stop_sequence=1, departure_delay=120
-                        ),
+                        StopTimeUpdate(stop_id="STOP_A", stop_sequence=1, departure_delay=120),
                     ],
                 ),
             ]
