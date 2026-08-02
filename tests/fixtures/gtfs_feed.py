@@ -83,7 +83,10 @@ DEFAULT_TRIPS = [
     Trip(
         trip_id="T1",
         service_id="S1",
-        stop_times=[("STOP_A", "08:00:00", "08:00:00"), ("STOP_B", "08:30:00", "08:30:00")],
+        stop_times=[
+            ("STOP_A", "08:00:00", "08:00:00"),
+            ("STOP_B", "08:30:00", "08:30:00"),
+        ],
     )
 ]
 
@@ -162,7 +165,13 @@ def build_feed(
                 }
                 for r in routes
             ],
-            ["route_id", "agency_id", "route_short_name", "route_long_name", "route_type"],
+            [
+                "route_id",
+                "agency_id",
+                "route_short_name",
+                "route_long_name",
+                "route_type",
+            ],
         ),
         "trips.txt": _csv(
             [
@@ -195,7 +204,9 @@ def build_feed(
                     "stop_sequence": seq,
                 }
                 for t in trips
-                for seq, (stop_id, arrival, departure) in enumerate(t.stop_times, start=1)
+                for seq, (stop_id, arrival, departure) in enumerate(
+                    t.stop_times, start=1
+                )
             ],
             ["trip_id", "arrival_time", "departure_time", "stop_id", "stop_sequence"],
         ),

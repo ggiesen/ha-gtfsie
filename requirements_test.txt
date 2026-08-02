@@ -1,0 +1,23 @@
+# Test dependencies for ha-gtfsie.
+#
+# Deliberately short. There is no integration code yet, so nothing here needs
+# Home Assistant: the only third-party import anywhere in the tests is the
+# GTFS-Realtime protobuf bindings, used to build fixture payloads.
+#
+# pytest-homeassistant-custom-component arrives with the first module that
+# imports homeassistant. It is not here yet on purpose: it pins one exact Home
+# Assistant version, so adding it before anything needs it would set this
+# project's supported floor as a side effect of a dependency file rather than as
+# a decision. See docs/SPEC.md open question 4.10.
+#
+# The GTFS engine itself lives in pygtfsie and is installed from PyPI; during
+# development, point at a checkout instead:
+#   pip install -e ../pygtfsie
+
+pytest>=8
+ruff>=0.6
+
+# Pinned to match what the integration will declare in manifest.json, so a
+# fixture cannot encode a protobuf shape the runtime would reject.
+gtfs-realtime-bindings==1.0.0
+protobuf>=5.28

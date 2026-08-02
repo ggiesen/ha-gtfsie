@@ -1,0 +1,39 @@
+stages:
+  - lint
+  - test
+
+default:
+  image: python:3.13-slim
+
+ruff:
+  stage: lint
+  script:
+    - pip install ruff
+    - ruff check tests
+    - ruff format --check tests
+
+# No Home Assistant here yet, so no pytest-homeassistant-custom-component and no
+# version pin inherited from it. When the first HA-facing module lands, PHACC
+# arrives with it and fixes this matrix to the Python versions that Home
+# Assistant release supports; until then, running wide is free information.
+pytest:
+  stage: test
+  parallel:
+    matrix:
+      - PY: ["3.12", "3.13", "3.14"]
+  image: python:$PY-slim
+  script:
+    - pip install -r requirements_test.txt
+    - pytest -q
+
+# The same rule as pygtfsie: no test may depend on the current time. It matters
+# more here than it looks, because these fixtures are what every later test
+# states its case through, and a builder that behaved differently after 22:00
+# would take a whole suite with it.
+time-sweep:
+  stage: test
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends faketime
+    - pip install -r requirements_test.txt
+  script:
+    - scripts/time-sweep.sh

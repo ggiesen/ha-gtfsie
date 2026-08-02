@@ -194,11 +194,16 @@ def fetch_out_of_process(feed: RealFeed, *, timeout: int = 300) -> Path:
     )
     subprocess.run(
         [
-            sys.executable, "-c", program,
-            feed.url, str(target),
+            sys.executable,
+            "-c",
+            program,
+            feed.url,
+            str(target),
             "ha-gtfsie-tests/1.0 (+https://gitlab.com/ggiesen/ha-gtfsie)",
         ],
-        check=True, capture_output=True, timeout=timeout + 30,
+        check=True,
+        capture_output=True,
+        timeout=timeout + 30,
     )
     return target
 
@@ -216,7 +221,10 @@ def fetch(feed: RealFeed, *, timeout: int = 300, force: bool = False) -> Path:
 
     tmp = target.with_suffix(".zip.part")
     request = urllib.request.Request(
-        feed.url, headers={"User-Agent": "ha-gtfsie-tests/1.0 (+https://gitlab.com/ggiesen/ha-gtfsie)"}
+        feed.url,
+        headers={
+            "User-Agent": "ha-gtfsie-tests/1.0 (+https://gitlab.com/ggiesen/ha-gtfsie)"
+        },
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
         tmp.write_bytes(response.read())
