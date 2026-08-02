@@ -1071,9 +1071,20 @@ Requirement I-22 says outside the backup-heavy paths, but Home Assistant OS back
 The mined requirement is marked unclear. Expansion is more work and can multiply row counts substantially; refusing leaves whole agencies unusable.
 **Recommendation:** expand. The rule is well specified in GTFS and the alternative silently shows one departure per day, which is the failure mode we are trying to eliminate. Record `frequencies_expanded` in `meta` and expose it as an attribute so the behaviour is visible. Where `exact_times=1`, generate at exact headway offsets; where `exact_times=0`, generate at the same offsets and mark those departures `frequency_based: true` in the payload so a consumer knows the times are nominal.
 
-**4.3 `ConfigSubentry` or independent config entries?**
-Subentries are the Home Assistant native model for hub-plus-children, give clean reconfigure and removal, and scope a departures configuration to one datasource without a cross-entry lookup. The API is comparatively young and reconfigure support for subentries has moved recently.
-**Recommendation:** subentries, with a minimum Home Assistant version chosen to guarantee subentry reconfigure. The cross-entry `datasource_id` lookup is exactly the coupling that produced the "which datasource is this entry using" class of bug, and it is worth a higher version floor to avoid it.
+**4.3 `ConfigSubentry` or independent config entries? DECIDED: subentries.**
+
+A datasource is one GTFS feed: a URL, a refresh schedule, and two SQLite files that may run to hundreds of megabytes and take hours to build. A route watch and a vicinity watch are cheap children pointing at one. The structure is hub-and-children; the only question was whether Home Assistant is told so.
+
+Independent entries would mean each watch carrying a `datasource_id` naming its parent. Nothing then prevents deleting the datasource and silently orphaning its watches, startup ordering becomes ours to hand-roll, and the cross-entry reference is invisible to the framework -- which is exactly the "which datasource is this entry using" class of defect in the mined history.
+
+Checked against the developer documentation and the core source rather than assumed:
+
+- Support is declared with `async_get_supported_subentry_types()`, returning `{type: ConfigSubentryFlow}`.
+- Reconfigure is supported, through `async_step_reconfigure()` with `self._get_entry()` and `self._get_reconfigure_subentry()`.
+- Subentry flows support only the `user` and `reconfigure` steps: **no reauth, no discovery**. Neither is needed. GTFS feeds are not discoverable, and the only credential -- a realtime API key -- belongs to the datasource, which is the parent entry, where reauth behaves normally.
+- `ConfigSubentryFlow` first appears in `homeassistant/config_entries.py` at tag **2025.3.0** and is absent at 2025.2.0. Reconfigure support is present from that same release, so the version floor this costs is known rather than guessed.
+
+Committed to before phase 4 writes a config flow rather than during. The entry structure is persisted in `.storage/core.config_entries`, and entity `unique_id`s conventionally encode the entry they belong to, so a later migration that goes even slightly wrong renames every entity and costs users their history, their customisations and their dashboard references.
 
 **4.4 The spring-forward anchor artefact.**
 Noon minus twelve hours puts the service-day origin at 23:00 the previous evening on a spring-forward day. GTFS defines stop times as elapsed seconds from that anchor, which is what the specification says and what the anchor implements. Most publishers, however, author `stop_times.txt` as wall-clock times, so a `00:00:00` entry on that one day reads an hour early.
@@ -1100,7 +1111,7 @@ Requirement R-57 lets a sensor read realtime from a local file, which is a path 
 **Recommendation:** restrict readable paths to the integration's own datasource directory and to `hass.config.path("gtfsie_rt")`, resolve symlinks before checking, and reject anything outside. The service that writes these files writes only into the same locations.
 
 **4.10 Minimum Home Assistant version.**
-Driven by subentry reconfigure support (4.3), `OptionsFlowWithReload`, and the current `ConfigEntryNotReady` deprecation.
+Driven by subentry reconfigure support (4.3), `OptionsFlowWithReload`, and the current `ConfigEntryNotReady` deprecation. Subentry reconfigure is no longer the unknown: it ships from **2025.3.0** (4.3 records how that was established), so on that count alone the floor plus one release of margin is 2025.4.0. The other two drivers are unpinned and may well set a higher floor; whichever is highest wins, and each should be checked the same way rather than inferred.
 **Recommendation:** pin `homeassistant` to the release that first carries subentry reconfigure plus one further release of margin, and add an explicit version check in `async_setup` that logs a named error rather than failing at import. Revisit only if the maintainer has evidence of a meaningful user population on older cores.
 
 **4.11 Over-fetch for effective-instant ordering.**
