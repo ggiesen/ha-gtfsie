@@ -83,7 +83,7 @@ def feed_zip(tmp_path):
 
 
 @pytest.fixture
-def stub_fetch(feed_zip):
+async def stub_fetch(feed_zip, hass):
     """Return the local archive instead of downloading one.
 
     Only the transfer is replaced. Validation, import, materialisation and every
@@ -104,6 +104,10 @@ def stub_fetch(feed_zip):
 
     with patch("custom_components.gtfsie.datasource.fetch", side_effect=_fetch) as mock:
         yield mock
+        # Drain before the patch is released. A reload or a scheduled refresh
+        # the test did not await otherwise runs during teardown, when the real
+        # fetch is back and reaches for the network.
+        await hass.async_block_till_done(wait_background_tasks=True)
 
 
 async def _setup(hass: HomeAssistant, **watch) -> MockConfigEntry:

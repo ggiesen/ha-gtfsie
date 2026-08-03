@@ -39,21 +39,27 @@ def _enable_custom_integrations(enable_custom_integrations):
 
 
 @pytest.fixture(autouse=True)
-def _no_network():
-    """Fail the download immediately, everywhere in this file.
+async def _no_network(hass: HomeAssistant):
+    """Fail the download immediately, everywhere in this file, and drain after.
 
     Setting up an entry starts a real import in the background, and the harness
     blocks DNS -- correctly, since a test that reached the network would be
     testing somebody else's server. Failing the fetch outright keeps that from
-    surfacing as a teardown error in tests that are about configuration and
-    never asked for a feed. The end-to-end path is covered in test_sensor.py,
-    against a real archive.
+    surfacing in tests that are about configuration and never asked for a feed.
+    The end-to-end path is covered in test_sensor.py, against a real archive.
+
+    The drain on the way out is the part that matters. Anything a test started
+    and did not await -- an entry created through the flow, a reload triggered
+    by adding a subentry -- otherwise runs during teardown, by which point the
+    patch is gone and it reaches for the network for real. That failed
+    intermittently depending on scheduling, which is the worst way to find out.
     """
     with patch(
         "custom_components.gtfsie.datasource.fetch",
         side_effect=FeedUnavailable("no network in tests"),
     ):
         yield
+        await hass.async_block_till_done(wait_background_tasks=True)
 
 
 async def _add_datasource(hass: HomeAssistant, url: str = FEED_URL, name: str = "Toronto"):
