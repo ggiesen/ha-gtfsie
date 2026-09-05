@@ -3,16 +3,15 @@
 A Home Assistant integration for public transit departures from GTFS static
 timetables and GTFS-Realtime feeds.
 
-> **Status: pre-alpha.** The config flow works -- a datasource can be added and
-> route and vicinity watches attached to it -- but nothing yet reads a feed or
-> produces an entity, so there is nothing to install. The engine it builds on,
-> [pygtfsie](https://gitlab.com/ggiesen/pygtfsie), handles fetch, validation,
-> import, materialisation and departure queries.
+> **Status: alpha.** A route watch works end to end: add a datasource, give it
+> an origin stop, and you get a timestamp sensor whose state is the next
+> departure plus a status sensor saying why it says that. The feed refreshes on
+> a schedule and the departure window rolls nightly, so it keeps working.
 >
-> The engine is published as [pygtfsie](https://pypi.org/project/pygtfsie/), so
-> `manifest.json` resolves and Home Assistant will install it. Adding this
-> repository to HACS as a custom repository works; it is not in the HACS default
-> list yet.
+> Three things are not done. The config flow asks for stop ids as text, so you
+> need to look them up in the feed first. The nearby-stops subentry stores its
+> configuration and produces no entities yet. There is no GTFS-Realtime support,
+> so departures are scheduled times only.
 
 ## What it is
 
@@ -72,8 +71,16 @@ than moved.
 
 ## Installation
 
-Not yet installable. When it is, it will be through HACS as a custom repository,
-and then as a default HACS integration.
+Through HACS, as a custom repository pointing at the GitHub mirror:
+
+    https://github.com/ggiesen/ha-gtfsie
+
+It is not in the HACS default list yet. Home Assistant installs the engine,
+[pygtfsie](https://pypi.org/project/pygtfsie/), from PyPI on first setup.
+
+Minimum Home Assistant is 2025.9.0, set by `OptionsFlowWithReload`. The suite
+runs against the current release rather than the floor, so that number is a
+claim about which API surface exists rather than one the tests exercise.
 
 ## Development
 
