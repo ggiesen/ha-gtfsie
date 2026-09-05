@@ -21,13 +21,12 @@ pytest-homeassistant-custom-component==0.13.348
 
 ruff>=0.6
 
-# The engine, from git until it is published. manifest.json already declares the
-# PyPI pin that users will install, so this line changes to `pygtfsie==<version>`
-# at the first release and nothing else moves.
+# The engine, pinned to the same release manifest.json declares so the tests run
+# against exactly what a user installs. Bump both together.
 #
 # For local development, install a checkout over the top and it wins:
 #   pip install -e ../pygtfsie
-pygtfsie @ git+https://gitlab.com/ggiesen/pygtfsie.git@master
+pygtfsie==0.1.0
 
 # Building GTFS-Realtime fixtures. Same pins the integration declares in
 # manifest.json, so a fixture cannot encode a protobuf shape the runtime rejects.

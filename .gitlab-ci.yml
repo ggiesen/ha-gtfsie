@@ -19,8 +19,6 @@ ruff:
 # separate package.
 pytest:
   stage: test
-  before_script:
-    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git
   script:
     - pip install -r requirements_test.txt
     - pytest -q
@@ -32,9 +30,7 @@ pytest:
 time-sweep:
   stage: test
   before_script:
-    # git as well as faketime: the engine is installed from a git URL until it
-    # is published, and the slim image ships neither.
-    - apt-get update -qq && apt-get install -y -qq --no-install-recommends faketime git
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends faketime
     - pip install -r requirements_test.txt
   script:
     - scripts/time-sweep.sh

@@ -9,9 +9,10 @@ timetables and GTFS-Realtime feeds.
 > [pygtfsie](https://gitlab.com/ggiesen/pygtfsie), handles fetch, validation,
 > import, materialisation and departure queries.
 >
-> `manifest.json` declares `pygtfsie` as a requirement and that package is not
-> yet on PyPI, so the integration cannot be installed through HACS until it is.
-> Tests install the engine from git; see `requirements_test.txt`.
+> The engine is published as [pygtfsie](https://pypi.org/project/pygtfsie/), so
+> `manifest.json` resolves and Home Assistant will install it. Adding this
+> repository to HACS as a custom repository works; it is not in the HACS default
+> list yet.
 
 ## What it is
 
