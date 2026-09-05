@@ -1,15 +1,24 @@
 {
   "domain": "gtfsie",
   "name": "GTFSie",
-  "codeowners": ["@ggiesen"],
+  "after_dependencies": [
+    "zone",
+    "person"
+  ],
+  "codeowners": [
+    "@ggiesen"
+  ],
   "config_flow": true,
   "dependencies": [],
-  "after_dependencies": ["zone", "person"],
   "documentation": "https://gitlab.com/ggiesen/ha-gtfsie",
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://gitlab.com/ggiesen/ha-gtfsie/-/issues",
-  "loggers": ["pygtfsie"],
-  "requirements": ["pygtfsie==0.1.0"],
+  "loggers": [
+    "pygtfsie"
+  ],
+  "requirements": [
+    "pygtfsie==0.1.0"
+  ],
   "version": "0.1.0"
 }
