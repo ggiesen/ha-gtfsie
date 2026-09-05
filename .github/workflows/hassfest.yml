@@ -1,0 +1,30 @@
+# Hassfest validates the integration's manifest, services.yaml, translations,
+# and config-flow strings against Home Assistant's own schema. It catches the
+# kinds of mistakes (missing keys in strings.json, wrong iot_class, etc.) that
+# would only show up at HA install time otherwise.
+#
+# This repo lives on GitLab; GitHub is a mirror. We still run hassfest on the
+# mirror because the hassfest tooling is GitHub-Actions-native and the cost is
+# negligible.
+
+name: Validate (hassfest)
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    # Re-run weekly so a new HA release that tightens validation surfaces
+    # quickly rather than at the next push.
+    - cron: "0 6 * * 1"
+
+jobs:
+  hassfest:
+    name: hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+      - name: Hassfest
+        uses: home-assistant/actions/hassfest@master

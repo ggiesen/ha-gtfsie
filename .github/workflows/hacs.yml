@@ -1,0 +1,29 @@
+# HACS validation. Runs the official hacs/action against this repo so we
+# fail loudly if hacs.json, the manifest, the directory layout, or any of
+# the other HACS rules drift out of compliance.
+#
+# Like hassfest.yml, this only runs on the GitHub mirror because the action
+# is GitHub-Actions-native. The real CI (lint + tests) is on the GitLab side.
+
+name: Validate (HACS)
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    # Catch HACS rule changes within a week without waiting for a push.
+    - cron: "0 6 * * 1"
+
+jobs:
+  hacs:
+    name: HACS validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: integration
