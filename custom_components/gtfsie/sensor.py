@@ -15,6 +15,7 @@ from __future__ import annotations
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -51,6 +52,23 @@ class _Base(CoordinatorEntity[RouteCoordinator], SensorEntity):
     def __init__(self, coordinator: RouteCoordinator) -> None:
         super().__init__(coordinator)
         self._subentry_id = coordinator.subentry.subentry_id
+
+        # A device per watch, hanging off the datasource. Without one,
+        # ``has_entity_name`` has no device name to build an entity id from, so
+        # every watch proposes the same "Next departure" and "Status" and the
+        # registry separates them with numeric suffixes -- ids that say nothing
+        # about which stop, direction or feed they belong to.
+        #
+        # ``via_device`` rather than folding the datasource name into this one:
+        # the manifest already calls this integration a hub, a datasource is
+        # genuinely one, and the registry can express that relationship itself.
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, self._subentry_id)},
+            name=coordinator.subentry.title,
+            model="Route watch",
+            entry_type=DeviceEntryType.SERVICE,
+            via_device=(DOMAIN, coordinator.config_entry.entry_id),
+        )
 
     @property
     def _data(self) -> WatchData:

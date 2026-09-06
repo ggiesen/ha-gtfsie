@@ -19,6 +19,8 @@ import pytest
 from freezegun import freeze_time
 from homeassistant.config_entries import ConfigEntryState, ConfigSubentryData
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from pygtfsie.ingest.download import FetchResult
 from pygtfsie.ingest.sniff import PayloadKind
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -509,3 +511,75 @@ async def test_a_cross_midnight_departure_reads_as_the_small_hours(hass, tmp_pat
     assert late[0]["day"] == "tomorrow"
     assert late[0]["service_date"] == "2026-06-15"
 
+
+class TestDeviceRegistry:
+    """Two watches on one datasource must be tellable apart.
+
+    Without a device, ``has_entity_name`` has no name to build an entity id
+    from, so every watch proposes the same "Next departure" and the registry
+    separates them with numeric suffixes -- ``sensor.next_departure_2`` says
+    nothing about which stop, direction or feed it reports on.
+    """
+
+    async def _two_watches(self, hass: HomeAssistant) -> MockConfigEntry:
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="Toronto",
+            unique_id=FEED_URL,
+            data={CONF_SOURCE_URL: FEED_URL},
+            subentries_data=[
+                ConfigSubentryData(
+                    subentry_type=SubentryKind.ROUTE.value,
+                    title="STOP_A to STOP_B",
+                    unique_id=None,
+                    data={CONF_ORIGIN_STOP_IDS: ["STOP_A"], CONF_DEST_STOP_IDS: ["STOP_B"]},
+                ),
+                ConfigSubentryData(
+                    subentry_type=SubentryKind.ROUTE.value,
+                    title="STOP_B to STOP_A",
+                    unique_id=None,
+                    data={CONF_ORIGIN_STOP_IDS: ["STOP_B"], CONF_DEST_STOP_IDS: ["STOP_A"]},
+                ),
+            ],
+        )
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done(wait_background_tasks=True)
+        await hass.async_block_till_done()
+        return entry
+
+    async def test_each_watch_gets_its_own_named_entities(self, hass, stub_fetch):
+        await hass.config.async_set_time_zone("America/Toronto")
+        with freeze_time(NOON):
+            entry = await self._two_watches(hass)
+        assert entry.state is ConfigEntryState.LOADED
+
+        ids = sorted(e.entity_id for e in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id))
+        assert ids == [
+            "sensor.stop_a_to_stop_b_next_departure",
+            "sensor.stop_a_to_stop_b_status",
+            "sensor.stop_b_to_stop_a_next_departure",
+            "sensor.stop_b_to_stop_a_status",
+        ]
+        assert not any(i.endswith("_2") for i in ids), "a numeric suffix means the names collided"
+
+    async def test_watches_hang_off_the_datasource(self, hass, stub_fetch):
+        """The datasource is the hub the manifest already claims it is."""
+        await hass.config.async_set_time_zone("America/Toronto")
+        with freeze_time(NOON):
+            entry = await self._two_watches(hass)
+
+        registry = dr.async_get(hass)
+        devices = dr.async_entries_for_config_entry(registry, entry.entry_id)
+        by_name = {d.name: d for d in devices}
+        assert set(by_name) == {"Toronto", "STOP_A to STOP_B", "STOP_B to STOP_A"}
+
+        datasource = by_name["Toronto"]
+        for title in ("STOP_A to STOP_B", "STOP_B to STOP_A"):
+            watch = by_name[title]
+            # Not merely set: via_device is dropped silently when the device it
+            # names does not exist yet, so this asserts the link actually formed.
+            assert watch.via_device_id == datasource.id, f"{title} is not attached to the datasource"
+            assert watch.config_entries_subentries[entry.entry_id] != {None}, (
+                f"{title} must belong to its subentry, so removing the watch removes the device"
+            )

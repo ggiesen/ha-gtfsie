@@ -17,6 +17,7 @@ import shutil
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 
 from .const import DOMAIN, SubentryKind
 from .coordinator import RouteCoordinator
@@ -39,6 +40,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "datasource": datasource,
         "coordinators": coordinators,
     }
+
+    # Registered here, before the platform loads, because a watch device names
+    # this one as its ``via_device`` and that link is dropped silently if the
+    # referenced device does not already exist. There is no datasource-level
+    # entity to bring it into being as a side effect, so it is created outright.
+    dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, entry.entry_id)},
+        name=entry.title,
+        model="GTFS datasource",
+        entry_type=dr.DeviceEntryType.SERVICE,
+    )
 
     await datasource.async_setup()
     for coordinator in coordinators.values():
