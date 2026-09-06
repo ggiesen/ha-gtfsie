@@ -50,6 +50,19 @@ _LOGGER = logging.getLogger(__name__)
 UPDATE_INTERVAL = timedelta(seconds=60)
 
 
+def effective_departure_utc(row: DepartureRow) -> int:
+    """When this departure is now expected, as best anything knows.
+
+    The scheduled instant while realtime is off, and the prediction once phase 6
+    can supply one. It is a named function rather than a bare attribute read
+    because exactly one decision depends on the distinction -- whether a
+    departure inside the lookback window is a vehicle running late or one that
+    has genuinely gone -- and that decision should have a single place to change
+    rather than a comparison to find again later.
+    """
+    return row.departure_utc
+
+
 class Status:
     OK = "ok"
     NO_DEPARTURES = "no_departures"
@@ -129,10 +142,21 @@ class RouteCoordinator(DataUpdateCoordinator[WatchData]):
         direction = options.get(CONF_DIRECTION_ID)
         direction_id = int(direction) if str(direction or "").strip().isdigit() else None
 
-        # The offset excludes departures too soon to reach; the lookback keeps
-        # ones already due, because a late vehicle has not left yet. They move
-        # the same bound in opposite directions and both are the user's choice.
-        from_utc = now_utc + offset * 60 - lookback * 60
+        # Two bounds, deliberately not one.
+        #
+        # The offset excludes departures too soon to reach, so it moves the
+        # instant from which a departure is worth showing. The lookback exists
+        # because a late vehicle has not left yet, so it widens what the query
+        # must *find* -- but a row it drags in is only worth showing while
+        # something still says that vehicle is coming.
+        #
+        # Collapsing the two is what made the state report a train that had
+        # already gone: the scan started in the past and the head was simply the
+        # oldest row it returned. On a service whose headway is no longer than
+        # the lookback -- 15 minutes each on UP Express, using the default --
+        # that is not an occasional slip, it is wrong on every single update.
+        earliest_shown_utc = now_utc + offset * 60
+        from_utc = earliest_shown_utc - lookback * 60
         window_end = self._window_end_utc()
         until_utc = window_end if window_end is not None else from_utc + 86400 * 30
 
@@ -166,10 +190,25 @@ class RouteCoordinator(DataUpdateCoordinator[WatchData]):
         if page is None:
             return WatchData(status=Status.STOP_NOT_IN_FEED, now_utc=now_utc, missing_stop_ids=missing)
 
-        # Trim to the presentation limit here rather than in SQL. The extra rows
-        # exist so a realtime overlay can reorder before this cut is made; until
-        # phase 6 there is nothing to reorder, and the cut is the same either way.
-        rows = page.rows[:limit]
+        # Q-34 and Q-140: drop what the lookback found but nothing justifies
+        # showing, order by effective instant per Q-141, then trim to the
+        # presentation limit. All three happen here rather than in SQL, because
+        # index.sqlite is ordered by *scheduled* instant and a delayed vehicle
+        # has to be able to move before either cut is made -- which is what the
+        # over-fetch of 4.11 buys and what doing this in the query would spend.
+        #
+        # The sort is a no-op while realtime is off, and deliberately kept: with
+        # the filter it makes ``effective_departure_utc`` the single thing phase
+        # 6 has to change, rather than a seam that is only half wired up.
+        #
+        # Dropped, not skipped over. Advancing past a stale row while leaving it
+        # in the list would make ``next_departure`` disagree with
+        # ``departures[0]``, which is its own defect and a well documented one.
+        due = sorted(
+            (row for row in page.rows if effective_departure_utc(row) >= earliest_shown_utc),
+            key=effective_departure_utc,
+        )
+        rows = due[:limit]
         if rows:
             status = Status.OK
         elif page.exhausted and window_end is not None:
@@ -181,7 +220,7 @@ class RouteCoordinator(DataUpdateCoordinator[WatchData]):
             rows=rows,
             status=status,
             now_utc=now_utc,
-            truncated=len(page.rows) > limit or page.truncated,
+            truncated=len(due) > limit or page.truncated,
             window_end_utc=window_end,
             missing_stop_ids=missing,
         )

@@ -198,19 +198,69 @@ class TestEndToEnd:
             await hass.async_block_till_done()
             after = [d["departure_time"] for d in _departure(hass).attributes["departures"]]
 
-        # Today's 13:00 and 14:00 have gone. The default 15-minute lookback
-        # reaches back to 14:15, which does not cover 14:00.
+        # Today's 13:00 and 14:00 have both gone.
         assert after[0] == "15:00"
         assert "13:00" not in after[:2]
 
-    async def test_the_lookback_keeps_a_just_missed_departure(self, hass, stub_fetch):
-        """A vehicle running late has not left, and is exactly what someone
-        asking "can I still catch it" needs to see."""
+    async def test_a_departure_that_has_gone_is_not_offered(self, hass, stub_fetch):
+        """The lookback widens the search, not the answer.
+
+        At 14:05 the default 15-minute lookback reaches back to 13:50, so the
+        query finds the 14:00. Nothing says that vehicle is late, so it has
+        left, and offering it would put a past instant in a timestamp sensor --
+        displayed as "5 minutes ago" and negative to any automation subtracting
+        it from now.
+
+        On a service whose headway is no longer than the lookback there is
+        always such a row, so the state was always the train just missed rather
+        than the one that could still be caught.
+        """
+        now = NOON.replace(hour=14, minute=5)
         await hass.config.async_set_time_zone("America/Toronto")
-        with freeze_time(NOON.replace(hour=14, minute=5)):
+        with freeze_time(now):
+            await _setup(hass, **{CONF_LOOKBACK_MINUTES: 15})
+            state = _departure(hass)
+            departures = state.attributes["departures"]
+
+        assert [d["departure_time"] for d in departures][0] == "15:00"
+        # The general invariant, not just the head: the lookback may not put a
+        # departure that has been and gone anywhere in the list. Asserting only
+        # on today's 14:00 would miss it, since tomorrow's 14:00 belongs there.
+        past = [d["departure_local"] for d in departures if datetime.fromisoformat(d["departure_utc"]) < now]
+        assert not past, f"departures already gone were offered: {past}"
+
+        # The state and the head of the list stay the same departure. Advancing
+        # one without the other is a defect in its own right.
+        assert state.state == departures[0]["departure_utc"]
+
+    async def test_the_lookback_keeps_a_vehicle_that_is_running_late(self, hass, stub_fetch):
+        """The case the lookback exists for, which needs realtime to arise.
+
+        A vehicle scheduled at 14:00 but predicted at 14:10 has not left at
+        14:05, and is exactly what someone asking "can I still catch it" needs
+        to see. Realtime is phase 6, so the prediction is injected at the seam
+        the coordinator consults -- which is what that seam is named for, and
+        what keeps this behaviour from being rediscovered the hard way later.
+        """
+        await hass.config.async_set_time_zone("America/Toronto")
+        scheduled_1400 = int(datetime(2026, 6, 15, 14, 0, tzinfo=TORONTO).timestamp())
+
+        def _late_by_ten_minutes(row):
+            if row.departure_utc == scheduled_1400:
+                return row.departure_utc + 600
+            return row.departure_utc
+
+        with (
+            freeze_time(NOON.replace(hour=14, minute=5)),
+            patch(
+                "custom_components.gtfsie.coordinator.effective_departure_utc",
+                side_effect=_late_by_ten_minutes,
+            ),
+        ):
             await _setup(hass, **{CONF_LOOKBACK_MINUTES: 15})
             times = [d["departure_time"] for d in _departure(hass).attributes["departures"]]
-        assert times[0] == "14:00"
+
+        assert times[0] == "14:00", "a vehicle predicted to leave in five minutes has not left"
 
     async def test_the_offset_skips_departures_that_cannot_be_reached(self, hass, stub_fetch):
         await hass.config.async_set_time_zone("America/Toronto")
@@ -458,3 +508,4 @@ async def test_a_cross_midnight_departure_reads_as_the_small_hours(hass, tmp_pat
     assert late, [d["departure_time"] for d in departures]
     assert late[0]["day"] == "tomorrow"
     assert late[0]["service_date"] == "2026-06-15"
+

@@ -1133,3 +1133,23 @@ effective instant, re-trims, and owns Q-47's flags. Choose the padding from the
 largest delay worth honouring rather than a round number. Cheap to build in at
 phase 4 and expensive to retrofit at phase 6, which is when it would otherwise
 be found.
+
+**As built, with one deviation.** The lower bound, the padding (`over_fetch()`)
+and the trim are as recommended, but the filter, the sort and Q-47's flags live
+in `coordinator.py` rather than in `presenter.py`. This section predates the
+library/integration split, after which `presenter.py` became pure formatting and
+the coordinator became what assembles `WatchData` and its `truncated` flag. Same
+order of operations, different module.
+
+The first cut of phase 4 took the lower bound and the padding and then applied
+neither the filter nor the sort, so the lookback widened the query and nothing
+narrowed the result -- Q-140's window without Q-34's discard. The state became
+whatever the scan found first, which on any service whose headway is no longer
+than the lookback is the departure the user has just missed, on every update.
+It survived review and the whole suite because it is not time-*dependent*: it is
+wrong identically at every instant, so `time-sweep.sh` compares two equally wrong
+runs and correctly reports no variation. It was found by running against a live
+feed, which is the second time dogfooding has caught what static reading did not.
+Guarded now by a test that pins an instant between two departures and asserts the
+head is the later one, and by a second that injects a prediction at
+`effective_departure_utc` so the lookback's real purpose stays covered.
